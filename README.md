@@ -13,3 +13,9 @@ After each upload cloud function will send an email notification to user.
 
 Deployment tool: Terraform
 
+## Used GCP Services
+
+- Cloud Run (Spring App)
+- Pub/Sub (add file events)
+- Cloud Function (Email notifier)
+- Cloud Storage
