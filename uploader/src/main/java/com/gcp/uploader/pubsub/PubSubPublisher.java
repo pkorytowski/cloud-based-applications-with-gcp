@@ -1,8 +1,9 @@
-package com.gcp.uploader;
+package com.gcp.uploader.pubsub;
 
 import com.google.cloud.spring.pubsub.core.PubSubTemplate;
 import com.google.protobuf.ByteString;
 import com.google.pubsub.v1.PubsubMessage;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
+@RequiredArgsConstructor
 public abstract class PubSubPublisher {
 
     private static final Logger LOG = LoggerFactory.getLogger(PubSubPublisher.class);

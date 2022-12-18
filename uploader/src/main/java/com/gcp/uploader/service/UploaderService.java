@@ -1,6 +1,10 @@
-package com.gcp.uploader;
+package com.gcp.uploader.service;
 
 
+import com.gcp.uploader.data.FileDto;
+import com.gcp.uploader.data.Image;
+import com.gcp.uploader.data.User;
+import com.gcp.uploader.pubsub.PubSubPublisher;
 import com.google.auth.oauth2.GoogleCredentials;
 import com.google.cloud.storage.Blob;
 import com.google.cloud.storage.Bucket;
@@ -13,6 +17,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -22,6 +27,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Random;
 
 @Service
@@ -36,20 +42,57 @@ public class UploaderService {
     private String gcpBucketId;
 
     private final PubSubPublisher uploaderPublisher;
+    private final UserService userService;
+    private final ImageService imageService;
 
-    public void upload(MultipartFile file) {
+    @Transactional
+    public void upload(MultipartFile file, String email) {
 
             String originalFileName = file.getOriginalFilename();
             if (originalFileName == null) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
             }
+
+            User user = userService.getUserByEmail(email);
+            if (user == null) {
+                user = userService.addUser(email);
+            }
+
+
+
             Path path = new File(originalFileName).toPath();
+
+            FileDto fileDto = null;
             try {
                 String contentType = Files.probeContentType(path);
-                FileDto fileDto = uploadFile(file, originalFileName, contentType);
+                fileDto = uploadFile(file, originalFileName, contentType);
             } catch (IOException e) {
 
             }
+
+            if (fileDto != null) {
+                user.setImages_count(user.getImages_count() + 1);
+                user = userService.save(user);
+                Image image = imageService.save(Image.builder()
+                        .user(user)
+                        .image(fileDto.getFileName())
+                        .build());
+
+                try {
+                    uploaderPublisher.publishMessage(createPubSubAttributeMap(image), "");
+                } catch (Exception e) {
+                    LOGGER.error("Error during sending pubsub message: {}", e.getMessage());
+                }
+            }
+    }
+
+    private Map<String, String> createPubSubAttributeMap(Image image) {
+        Map<String, String> attrMap = new HashMap<>();
+
+        attrMap.put("email", image.getUser().getEmail());
+        attrMap.put("images_count", Integer.toString(image.getUser().getImages_count()));
+        attrMap.put("name", image.getImage());
+        return attrMap;
     }
 
     public FileDto uploadFile(MultipartFile multipartFile, String fileName, String contentType) {
@@ -79,7 +122,7 @@ public class UploaderService {
 
             if(blob != null){
                 LOGGER.debug("File successfully uploaded to GCS");
-                uploaderPublisher.publishMessage(new HashMap<>(), "Udalo sie");
+
                 return new FileDto(blob.getName(), blob.getMediaLink());
             }
 
