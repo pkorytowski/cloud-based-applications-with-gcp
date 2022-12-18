@@ -11,7 +11,6 @@ import org.apache.commons.io.FileUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -20,10 +19,9 @@ import org.springframework.web.server.ResponseStatusException;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.Random;
 
 @Service
@@ -37,8 +35,7 @@ public class UploaderService {
     @Value("${gcp-bucket}")
     private String gcpBucketId;
 
-    //@Value("${spring.cloud.gcp.credentials.location}")
-    private String gcpConfigFile = "Users/pawel/.config/gcloud/application_default_credentials.json";
+    private final PubSubPublisher uploaderPublisher;
 
     public void upload(MultipartFile file) {
 
@@ -82,6 +79,7 @@ public class UploaderService {
 
             if(blob != null){
                 LOGGER.debug("File successfully uploaded to GCS");
+                uploaderPublisher.publishMessage(new HashMap<>(), "Udalo sie");
                 return new FileDto(blob.getName(), blob.getMediaLink());
             }
 
