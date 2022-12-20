@@ -60,6 +60,7 @@ resource "google_storage_bucket_object" "zip" {
 resource "google_cloudfunctions_function" "notifier-function" {
   name     = "notifier_function"
   runtime  = "nodejs12"
+  region = "us-central1"
   event_trigger {
     event_type = "google.pubsub.topic.publish"
     resource   = google_pubsub_topic.topic.name
@@ -70,6 +71,10 @@ resource "google_cloudfunctions_function" "notifier-function" {
 
   entry_point           = "bq_alerts"
   timeout               = 60
+  depends_on   = [
+    google_storage_bucket_object.zip,
+    google_pubsub_topic.topic
+  ]
 }
 
 
