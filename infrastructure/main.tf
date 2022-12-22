@@ -116,6 +116,14 @@ resource "google_cloud_run_service" "api" {
           name  = "DB_PASSWORD"
           value = data.google_secret_manager_secret_version.sql-password.secret_data
         }
+        env {
+            name = "GOOGLE_CLOUD_BUCKET"
+            value = var.bucket_name
+        }
+        env {
+            name = "TOPIC_NAME"
+            value = var.pubsub_topic_name
+        }
       }
     }
   }
