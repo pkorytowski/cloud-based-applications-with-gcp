@@ -8,8 +8,8 @@ terraform {
 }
 
 resource "google_storage_bucket" "static"{
-  name          = "agh-gcp-project-2022"
-  location      = "US"
+  name          = var.bucket_name
+  location      = var.bucket_location
   force_destroy = true
 
   uniform_bucket_level_access = true
@@ -17,46 +17,39 @@ resource "google_storage_bucket" "static"{
 }
 
 resource "google_pubsub_topic" "topic" {
-  name = "uploader-topic"
+  name = var.pubsub_topic_name
 }
 
 resource "google_pubsub_subscription" "subscription" {
-    name = "uploader-push-subscription"
+    name = var.pubsub_push_subscription
     topic = google_pubsub_topic.topic.name
-
     ack_deadline_seconds = 20
-
 }
 
 resource "google_storage_bucket" "function_bucket" {
     name     = "agh-gcp-project-2022-function"
-    location = "US"
+    location = var.bucket_location
 }
 
 data "archive_file" "source" {
     type        = "zip"
-    source_dir  = "../cf"
+    source_dir  = var.cf_source_dir
     output_path = "/tmp/function.zip"
 }
 
-# Add source code zip to the Cloud Function's bucket
 resource "google_storage_bucket_object" "zip" {
     source       = data.archive_file.source.output_path
     content_type = "application/zip"
 
-    # Append to the MD5 checksum of the files's content
-    # to force the zip to be updated as soon as a change occurs
     name         = "src-${data.archive_file.source.output_md5}.zip"
     bucket       = google_storage_bucket.function_bucket.name
 
-    # Dependencies are automatically inferred so these lines can be deleted
     depends_on   = [
         google_storage_bucket.function_bucket,  # declared in `storage.tf`
         data.archive_file.source
     ]
 }
 
-# Create the cloud function
 resource "google_cloudfunctions_function" "notifier-function" {
   name     = "notifier_function"
   runtime  = "nodejs12"
@@ -69,6 +62,11 @@ resource "google_cloudfunctions_function" "notifier-function" {
   source_archive_bucket = google_storage_bucket.function_bucket.name
   source_archive_object = google_storage_bucket_object.zip.name
 
+    environment_variables = {
+    "USER" = data.google_secret_manager_secret_version.notifier-user.secret_data
+    "PASSWORD" = data.google_secret_manager_secret_version.notifier-password.secret_data
+  }
+
   entry_point           = "bq_alerts"
   timeout               = 60
   depends_on   = [
@@ -76,7 +74,6 @@ resource "google_cloudfunctions_function" "notifier-function" {
     google_pubsub_topic.topic
   ]
 }
-
 
 resource "google_sql_database_instance" "uploader" {
   name = "uploader-sql-instance"
@@ -88,14 +85,62 @@ resource "google_sql_database_instance" "uploader" {
 }
 
 resource "google_sql_user" "user" {
-  name     = "user"
+  name     = data.google_secret_manager_secret_version.sql-user.secret_data
   instance = google_sql_database_instance.uploader.name
-  password = "abc"
+  password =  data.google_secret_manager_secret_version.sql-password.secret_data
 }
 
 resource "google_sql_database" "uploader-db" {
   name   = "uploader-db"
   instance = google_sql_database_instance.uploader.name
   charset = "utf8"
+}
+
+resource "google_cloud_run_service" "api" {
+  name     = var.cloud_run_name
+  location = "us-central1"
+
+  template {
+    spec {
+      containers {
+        image = var.docker_image
+        env {
+          name  = "GOOGLE_CLOUD_PROJECT"
+          value = var.project_id
+        }
+        env {
+          name  = "DB_USER"
+          value = data.google_secret_manager_secret_version.sql-user.secret_data
+        }
+        env {
+          name  = "DB_PASSWORD"
+          value = data.google_secret_manager_secret_version.sql-password.secret_data
+        }
+      }
+    }
+  }
+  autogenerate_revision_name = true
+
+  traffic {
+    percent         = 100
+    latest_revision = true
+  }
+}
+
+data "google_iam_policy" "noauth" {
+  binding {
+    role    = "roles/run.invoker"
+    members = [
+      "allUsers",
+    ]
+  }
+}
+
+resource "google_cloud_run_service_iam_policy" "noauth" {
+  location = google_cloud_run_service.api.location
+  project  = google_cloud_run_service.api.project
+  service  = google_cloud_run_service.api.name
+
+  policy_data = data.google_iam_policy.noauth.policy_data
 }
 
