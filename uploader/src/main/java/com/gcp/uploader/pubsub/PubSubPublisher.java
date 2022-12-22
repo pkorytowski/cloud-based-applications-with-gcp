@@ -26,11 +26,11 @@ public abstract class PubSubPublisher {
         pubSubTemplate.publish(topic(), pubsubMessage).get();
     }
 
-    public void publishMessage(Map<String, String> attributeMap, String message) throws ExecutionException, InterruptedException {
+    public void publishMessage(Map<String, String> attributeMap) throws ExecutionException, InterruptedException {
         LOG.info("Sending Message to the topic:::");
         PubsubMessage pubsubMessage = PubsubMessage.newBuilder()
                 .putAllAttributes(attributeMap)
-                .setData(ByteString.copyFromUtf8(message))
+                //.setData(ByteString.copyFromUtf8(message))
                 //.setMessageId(messageId)
                 .build();
 
