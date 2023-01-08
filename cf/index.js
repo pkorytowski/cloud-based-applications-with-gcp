@@ -1,9 +1,6 @@
 exports.bq_alerts = (event, context) => {
     const nodemailer = require('nodemailer');
 
-    console.log("User: " + process.env.USER)
-    console.log("User: " + process.env.PASSWORD)
-
     const transporter = nodemailer.createTransport({
         service: "gmail",
         auth: {

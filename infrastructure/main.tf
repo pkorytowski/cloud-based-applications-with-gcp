@@ -45,7 +45,7 @@ resource "google_storage_bucket_object" "zip" {
     bucket       = google_storage_bucket.function_bucket.name
 
     depends_on   = [
-        google_storage_bucket.function_bucket,  # declared in `storage.tf`
+        google_storage_bucket.function_bucket,
         data.archive_file.source
     ]
 }
@@ -133,6 +133,12 @@ resource "google_cloud_run_service" "api" {
     percent         = 100
     latest_revision = true
   }
+
+  depends_on = [
+      google_storage_bucket.static,
+      google_pubsub_subscription.subscription,
+      google_sql_database.uploader-db
+  ]
 }
 
 data "google_iam_policy" "noauth" {
